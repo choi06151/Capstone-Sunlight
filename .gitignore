@@ -1,0 +1,40 @@
+# Unreal generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Visual Studio
+.vs/
+.vscode/
+*.sln
+*.VC.db
+*.VC.opendb
+
+# Build
+Build/
+
+# Logs
+*.log
+
+# Unreal autosaves
+*_BuiltData.uasset
+
+# Crash
+crashinfo--*
+
+# Mac
+.DS_Store
+
+# Python
+__pycache__/
+
+# ---------------------
+# Assets (Google Drive)
+# ---------------------
+
+Content/*
+
+# CJW 폴더만 Git에 포함
+!Content/GitAssets/
+!Content/GitAssets/**
