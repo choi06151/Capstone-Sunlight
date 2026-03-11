@@ -10,19 +10,19 @@
 
 * 최재원(https://github.com/choi06151)
 
-특수효과,카메라,라이팅
+시각적 효과 및 연출 전문
 
 * 정수연(https://github.com/suyeon09)
 
-AI
+해프닝
 
 * 김동현(https://github.com/Baek1213)
 
-성장 인터렉션
+스피드 트리 연결 전문
 
 * 김수진(https://github.com/kdjh2002)
 
-립모션
+립모션 연결 전문
 
 
 
