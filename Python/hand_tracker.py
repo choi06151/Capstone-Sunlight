@@ -77,8 +77,8 @@ while cap.isOpened():
             # 현재 제스처 판별 (FIST / OPEN / POINT)
             gesture = get_gesture(lm)
 
-            # 주먹일 때만 손목 각도 계산, 아니면 0 (테마 속도 조절용)
-            angle = get_wrist_angle(lm) if gesture == "FIST" else 0.0
+            # 주먹일 때만 손목 각도 계산, 아니면 0 (테마 속도 조절용) (-67기준으로 0으로 만들기)
+            angle = get_wrist_angle(lm)-(-67) if gesture == "FIST" else 0.0
 
             # 6조각 데이터 조립 후 언리얼로 전송
             # 형식: L/R, X, Y, Z, 제스처, 각도
