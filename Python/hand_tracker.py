@@ -44,7 +44,7 @@ hands = mp_hands.Hands(
 mp_draw = mp.solutions.drawing_utils
 
 # 기본 웹캠(0번) 켜기
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 print("카메라를 켜는 중입니다...")
 print("3초 후 전송 시작! 언리얼을 재생하세요!")
 time.sleep(3)  # 언리얼 소켓이 열릴 때까지 대기
@@ -73,6 +73,15 @@ while cap.isOpened():
 
             # 검지 손가락 끝(8번 랜드마크) 좌표 추출 → 나이아가라 햇빛 위치용
             idx_finger = lm[8]
+            x_val = idx_finger.x
+            z_val = idx_finger.y  # 상하
+
+            # 손 크기로 앞뒤 대체
+            dx = lm[9].x - lm[0].x
+            dy = lm[9].y - lm[0].y
+            hand_size = math.sqrt(dx*dx + dy*dy)
+            y_val = hand_size
+            print(f"hand_size: {y_val:.4f}")  # 범위 확인용
 
             # 현재 제스처 판별 (FIST / OPEN / POINT)
             gesture = get_gesture(lm)
@@ -82,7 +91,7 @@ while cap.isOpened():
 
             # 6조각 데이터 조립 후 언리얼로 전송
             # 형식: L/R, X, Y, Z, 제스처, 각도
-            data_string = f"{hand_label},{idx_finger.x},{idx_finger.y},{idx_finger.z},{gesture},{angle}"
+            data_string = f"{hand_label},{x_val},{y_val},{z_val},{gesture},{angle}"
             sock.sendto(data_string.encode(), (UDP_IP, UDP_PORT))
 
             # 파이썬 화면에 손가락 뼈대 그리기
