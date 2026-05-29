@@ -88,6 +88,7 @@ while cap_front.isOpened() and cap_top.isOpened():
             y_val = lm[8].y
             print(f"y_val(앞뒤): {y_val:.4f}")  # 추가
             mp_draw.draw_landmarks(image_top, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    print(f"[정면] x(좌우): {x_val:.4f} | z(상하): {z_val:.4f} | 제스처: {gesture}")
 
     # 스무딩
     smooth_x.append(x_val)
