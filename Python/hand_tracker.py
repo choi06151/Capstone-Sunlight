@@ -35,8 +35,8 @@ hands_front = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detec
 hands_top = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
-cap_front = cv2.VideoCapture(0)  # 정면 웹캠
-cap_top = cv2.VideoCapture(1)    # iVCam (위에서 아래)
+cap_front = cv2.VideoCapture(1)  # 왼쪽 카메라 (상하)
+cap_top = cv2.VideoCapture(0)    # 아래 카메라 (앞뒤 + 좌우)
 
 print("카메라를 켜는 중입니다...")
 print("3초 후 전송 시작! 언리얼을 재생하세요!")
@@ -48,62 +48,49 @@ x_val, y_val, z_val = 0.5, 0.2, 0.5
 gesture = "POINT"
 angle = 0.0
 hand_label = "R"
-while cap_front.isOpened():
-    success, image = cap_front.read()
 
-    if not success:
+while cap_front.isOpened() and cap_top.isOpened():
+    success_front, image_front = cap_front.read()
+    success_top, image_top = cap_top.read()
+
+    if not success_front or not success_top:
         print("카메라를 찾을 수 없습니다.")
         break
 
-    image = cv2.flip(image, 1)
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = hands_front.process(rgb)
+    # 정면 카메라 처리 (좌우, 상하)
+    image_front = cv2.flip(image_front, 1)
+    rgb_front = cv2.cvtColor(image_front, cv2.COLOR_BGR2RGB)
+    results_front = hands_front.process(rgb_front)
 
-    if results.multi_hand_landmarks and results.multi_handedness:
-        for hand_landmarks, handedness in zip(
-                results.multi_hand_landmarks,
-                results.multi_handedness):
-
+    if results_front.multi_hand_landmarks and results_front.multi_handedness:
+        for hand_landmarks, handedness in zip(results_front.multi_hand_landmarks, results_front.multi_handedness):
             hand_label = handedness.classification[0].label[0]
-
             lm = hand_landmarks.landmark
             idx_finger = lm[8]
-
-            # 좌우
-            x_val = idx_finger.x
-
-            # 상하
-            z_val = idx_finger.y
-
-            # 앞뒤 (MediaPipe 깊이값)
-            y_val = -idx_finger.z
-
+            z_val = idx_finger.y  # 상하
             gesture = get_gesture(lm)
             angle = get_wrist_angle(lm)-(-67)+1 if gesture == "FIST" else 1.0
+            mp_draw.draw_landmarks(image_front, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            cv2.putText(image_front, f"{hand_label}: {gesture}",
+                        (10, 30 if hand_label == "L" else 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            mp_draw.draw_landmarks(
-                image,
-                hand_landmarks,
-                mp_hands.HAND_CONNECTIONS
-            )
+    # 위 카메라 처리 (앞뒤)
+    image_top = cv2.flip(image_top, 1)
+    rgb_top = cv2.cvtColor(image_top, cv2.COLOR_BGR2RGB)
+    results_top = hands_top.process(rgb_top)
 
-            cv2.putText(
-                image,
-                f"{hand_label}: {gesture}",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0),
-                2
-            )
+    if results_top.multi_hand_landmarks:
+        for hand_landmarks in results_top.multi_hand_landmarks:
+            lm = hand_landmarks.landmark
+            # 위에서 아래로 찍을 때 Y값이 앞뒤, X값이 좌우
+            y_val = lm[8].y
+            x_val = lm[8].x   # 좌우 ← 추가
+            print(f"y_val(앞뒤): {y_val:.4f} | x_val(좌우): {x_val:.4f}")
+            mp_draw.draw_landmarks(image_top, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    print(f"[정면] x(좌우): {x_val:.4f} | z(상하): {z_val:.4f} | 제스처: {gesture}")
 
-    print(
-        f"x:{x_val:.3f} "
-        f"y:{y_val:.3f} "
-        f"z:{z_val:.3f} "
-        f"gesture:{gesture}"
-    )
-
+    # 스무딩
     smooth_x.append(x_val)
     smooth_y.append(y_val)
     smooth_z.append(z_val)
@@ -112,72 +99,15 @@ while cap_front.isOpened():
     y_val = sum(smooth_y) / len(smooth_y)
     z_val = sum(smooth_z) / len(smooth_z)
 
+    # UDP 전송
     data_string = f"{hand_label},{x_val},{y_val},{z_val},{gesture},{angle}"
     sock.sendto(data_string.encode(), (UDP_IP, UDP_PORT))
 
-    cv2.imshow("Hand Tracker", image)
+    cv2.imshow("Front Camera", image_front)
+    cv2.imshow("Top Camera", image_top)
 
     if cv2.waitKey(5) & 0xFF == 27:
         break
-# while cap_front.isOpened() and cap_top.isOpened():
-#     success_front, image_front = cap_front.read()
-#     success_top, image_top = cap_top.read()
-
-#     if not success_front or not success_top:
-#         print("카메라를 찾을 수 없습니다.")
-#         break
-
-#     # 정면 카메라 처리 (좌우, 상하)
-#     image_front = cv2.flip(image_front, 1)
-#     rgb_front = cv2.cvtColor(image_front, cv2.COLOR_BGR2RGB)
-#     results_front = hands_front.process(rgb_front)
-
-#     if results_front.multi_hand_landmarks and results_front.multi_handedness:
-#         for hand_landmarks, handedness in zip(results_front.multi_hand_landmarks, results_front.multi_handedness):
-#             hand_label = handedness.classification[0].label[0]
-#             lm = hand_landmarks.landmark
-#             idx_finger = lm[8]
-#             x_val = idx_finger.x  # 좌우
-#             z_val = idx_finger.y  # 상하
-#             gesture = get_gesture(lm)
-#             angle = get_wrist_angle(lm)-(-67)+1 if gesture == "FIST" else 1.0
-#             mp_draw.draw_landmarks(image_front, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-#             cv2.putText(image_front, f"{hand_label}: {gesture}",
-#                         (10, 30 if hand_label == "L" else 60),
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-#     # 위 카메라 처리 (앞뒤)
-#     image_top = cv2.flip(image_top, 1)
-#     rgb_top = cv2.cvtColor(image_top, cv2.COLOR_BGR2RGB)
-#     results_top = hands_top.process(rgb_top)
-
-#     if results_top.multi_hand_landmarks:
-#         for hand_landmarks in results_top.multi_hand_landmarks:
-#             lm = hand_landmarks.landmark
-#             # 위에서 아래로 찍을 때 Y값이 앞뒤
-#             y_val = lm[8].y
-#             print(f"y_val(앞뒤): {y_val:.4f}")  # 추가
-#             mp_draw.draw_landmarks(image_top, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-#     print(f"[정면] x(좌우): {x_val:.4f} | z(상하): {z_val:.4f} | 제스처: {gesture}")
-
-#     # 스무딩
-#     smooth_x.append(x_val)
-#     smooth_y.append(y_val)
-#     smooth_z.append(z_val)
-
-#     x_val = sum(smooth_x) / len(smooth_x)
-#     y_val = sum(smooth_y) / len(smooth_y)
-#     z_val = sum(smooth_z) / len(smooth_z)
-
-#     # UDP 전송
-#     data_string = f"{hand_label},{x_val},{y_val},{z_val},{gesture},{angle}"
-#     sock.sendto(data_string.encode(), (UDP_IP, UDP_PORT))
-
-#     cv2.imshow("Front Camera", image_front)
-#     cv2.imshow("Top Camera", image_top)
-
-#     if cv2.waitKey(5) & 0xFF == 27:
-#         break
 
 cap_front.release()
 cap_top.release()
