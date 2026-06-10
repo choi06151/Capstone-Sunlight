@@ -3,6 +3,7 @@
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "Common/UdpSocketBuilder.h"
+#include "IPAddress.h"
 
 AUDPReceiver::AUDPReceiver()
 {
@@ -32,7 +33,9 @@ void AUDPReceiver::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (ListenSocket)
     {
         ListenSocket->Close();
+
         ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenSocket);
+
         ListenSocket = nullptr;
 
         UE_LOG(LogTemp, Warning, TEXT("[UDP] 소켓 닫힘"));
@@ -43,7 +46,10 @@ void AUDPReceiver::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    if (!ListenSocket) return;
+    if (!ListenSocket)
+    {
+        return;
+    }
 
     TSharedRef<FInternetAddr> Sender =
         ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
@@ -67,19 +73,25 @@ void AUDPReceiver::Tick(float DeltaTime)
             *Sender
         );
 
-        if (!bSuccess || Read <= 0) break;
+        if (!bSuccess || Read <= 0)
+        {
+            break;
+        }
 
         ReceivedData.SetNum(Read);
         ReceivedData.Add(0);
 
-        FString ReceivedString = FString(UTF8_TO_TCHAR(ReceivedData.GetData()));
+        FString ReceivedString =
+            FString(UTF8_TO_TCHAR(ReceivedData.GetData()));
+
         ReceivedString.TrimStartAndEndInline();
 
-        // 예시:
-        // L,0.5123,0.4211,0.3255,OPEN,1.0;R,0.7123,0.5333,0.2211,FIST,45.0
-
         TArray<FString> HandPackets;
-        ReceivedString.ParseIntoArray(HandPackets, TEXT(";"), true);
+        ReceivedString.ParseIntoArray(
+            HandPackets,
+            TEXT(";"),
+            true
+        );
 
         for (const FString& HandPacket : HandPackets)
         {
@@ -87,15 +99,23 @@ void AUDPReceiver::Tick(float DeltaTime)
             TrimmedPacket.TrimStartAndEndInline();
 
             TArray<FString> ParsedArray;
-            TrimmedPacket.ParseIntoArray(ParsedArray, TEXT(","), true);
+
+            TrimmedPacket.ParseIntoArray(
+                ParsedArray,
+                TEXT(","),
+                true
+            );
 
             if (ParsedArray.Num() == 6)
             {
                 FString HandType = ParsedArray[0];
+
                 float X = FCString::Atof(*ParsedArray[1]);
                 float Y = FCString::Atof(*ParsedArray[2]);
                 float Z = FCString::Atof(*ParsedArray[3]);
+
                 FString Gesture = ParsedArray[4];
+
                 float Angle = FCString::Atof(*ParsedArray[5]);
 
                 FVector FingerPos(X, Y, Z);
@@ -103,7 +123,7 @@ void AUDPReceiver::Tick(float DeltaTime)
                 UE_LOG(
                     LogTemp,
                     Log,
-                    TEXT("[UDP] Hand: %s | Gesture: %s | Angle: %.1f | Pos: (%.2f, %.2f, %.2f)"),
+                    TEXT("[UDP] Hand:%s Gesture:%s Angle:%.1f Pos:(%.3f %.3f %.3f)"),
                     *HandType,
                     *Gesture,
                     Angle,
@@ -112,17 +132,31 @@ void AUDPReceiver::Tick(float DeltaTime)
                     Z
                 );
 
-                OnHandDataReceived(HandType, FingerPos, Gesture, Angle);
+                if (HandType.Equals(TEXT("L")))
+                {
+                    OnLeftHandDataReceived(
+                        FingerPos,
+                        Gesture,
+                        Angle
+                    );
+                }
+                else if (HandType.Equals(TEXT("R")))
+                {
+                    OnRightHandDataReceived(
+                        FingerPos,
+                        Gesture,
+                        Angle
+                    );
+                }
             }
             else
             {
                 UE_LOG(
                     LogTemp,
                     Warning,
-                    TEXT("[UDP] 손 데이터 파싱 실패 - 조각 개수: %d | 원본 손 패킷: %s | 전체 원본: %s"),
+                    TEXT("[UDP] 손 데이터 파싱 실패 | Count:%d | Packet:%s"),
                     ParsedArray.Num(),
-                    *TrimmedPacket,
-                    *ReceivedString
+                    *TrimmedPacket
                 );
             }
         }

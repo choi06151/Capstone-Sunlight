@@ -13,10 +13,10 @@ mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 
 def get_gesture(lm):
-    index_up  = lm[8].y  < lm[6].y
+    index_up = lm[8].y < lm[6].y
     middle_up = lm[12].y < lm[10].y
-    ring_up   = lm[16].y < lm[14].y
-    pinky_up  = lm[20].y < lm[18].y
+    ring_up = lm[16].y < lm[14].y
+    pinky_up = lm[20].y < lm[18].y
 
     if not index_up and not middle_up and not ring_up and not pinky_up:
         return "FIST"
@@ -30,9 +30,9 @@ def get_wrist_angle(lm):
     dy = lm[9].y - lm[0].y
     return round(math.degrees(math.atan2(dy, dx)), 1)
 
-# flip 때문에 좌우가 반대로 나오면 여기만 바꾸면 됨
 def label_to_short(label):
     return "L" if label == "Left" else "R"
+    # 반대로 나오면 아래 사용
     # return "R" if label == "Left" else "L"
 
 hands_left = mp_hands.Hands(
@@ -50,11 +50,13 @@ hands_under = mp_hands.Hands(
 )
 
 cap_left = cv2.VideoCapture(1)
-cap_under = cv2.VideoCapture(0)
+cap_under = cv2.VideoCapture(2)
 
 hand_data = {
     "L": {
-        "x": 0.5, "y": 0.5, "z": 0.5,
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5,
         "gesture": "NONE",
         "angle": 0.0,
         "sx": deque(maxlen=5),
@@ -62,7 +64,9 @@ hand_data = {
         "sz": deque(maxlen=5)
     },
     "R": {
-        "x": 0.5, "y": 0.5, "z": 0.5,
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5,
         "gesture": "NONE",
         "angle": 0.0,
         "sx": deque(maxlen=5),
@@ -72,7 +76,7 @@ hand_data = {
 }
 
 print("카메라를 켜는 중입니다...")
-print("3초 후 전송 시작! 언리얼을 재생하세요!")
+print("3초 후 전송 시작!")
 time.sleep(3)
 print("전송 시작!")
 
@@ -85,84 +89,164 @@ while cap_left.isOpened() and cap_under.isOpened():
         print("카메라를 찾을 수 없습니다.")
         break
 
+    # =====================================================
+    # LEFT CAMERA : Z만 담당
+    # =====================================================
+
     image_left = cv2.flip(image_left, 1)
-    rgb_left = cv2.cvtColor(image_left, cv2.COLOR_BGR2RGB)
+
+    rgb_left = cv2.cvtColor(
+        image_left,
+        cv2.COLOR_BGR2RGB
+    )
+
     results_left = hands_left.process(rgb_left)
 
     if results_left.multi_hand_landmarks and results_left.multi_handedness:
+
         for hand_landmarks, handedness in zip(
             results_left.multi_hand_landmarks,
             results_left.multi_handedness
         ):
-            label = label_to_short(handedness.classification[0].label)
+
+            label = label_to_short(
+                handedness.classification[0].label
+            )
+
             lm = hand_landmarks.landmark
 
+            # Z만 갱신
             hand_data[label]["z"] = lm[8].y
-            hand_data[label]["gesture"] = get_gesture(lm)
 
-            if hand_data[label]["gesture"] == "FIST":
-                hand_data[label]["angle"] = get_wrist_angle(lm) - (-67) + 1
-            else:
-                hand_data[label]["angle"] = 1.0
-
-            mp_draw.draw_landmarks(image_left, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            mp_draw.draw_landmarks(
+                image_left,
+                hand_landmarks,
+                mp_hands.HAND_CONNECTIONS
+            )
 
             cv2.putText(
                 image_left,
-                f"{label} {hand_data[label]['gesture']}",
+                f"{label} Z:{lm[8].y:.2f}",
                 (10, 30 if label == "L" else 60),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
-                (0, 255, 0),
+                (0,255,0),
                 2
             )
 
+    # =====================================================
+    # UNDER CAMERA : L/R + X/Y + Gesture + Angle
+    # =====================================================
+
     image_under = cv2.flip(image_under, 1)
-    rgb_under = cv2.cvtColor(image_under, cv2.COLOR_BGR2RGB)
+
+    rgb_under = cv2.cvtColor(
+        image_under,
+        cv2.COLOR_BGR2RGB
+    )
+
     results_under = hands_under.process(rgb_under)
 
     if results_under.multi_hand_landmarks and results_under.multi_handedness:
+
         for hand_landmarks, handedness in zip(
             results_under.multi_hand_landmarks,
             results_under.multi_handedness
         ):
-            label = label_to_short(handedness.classification[0].label)
+
+            label = label_to_short(
+                handedness.classification[0].label
+            )
+
             lm = hand_landmarks.landmark
 
             hand_data[label]["x"] = lm[8].x
             hand_data[label]["y"] = lm[8].y
 
-            mp_draw.draw_landmarks(image_under, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            gesture = get_gesture(lm)
+            hand_data[label]["gesture"] = gesture
+
+            if gesture == "FIST":
+                hand_data[label]["angle"] = (
+                    get_wrist_angle(lm) - (-67) + 1
+                )
+            else:
+                hand_data[label]["angle"] = 1.0
+
+            mp_draw.draw_landmarks(
+                image_under,
+                hand_landmarks,
+                mp_hands.HAND_CONNECTIONS
+            )
 
             cv2.putText(
                 image_under,
-                f"{label}",
+                f"{label} {gesture}",
                 (10, 30 if label == "L" else 60),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
-                (0, 255, 0),
+                (0,255,0),
                 2
             )
 
-    for label in ["L", "R"]:
-        hand_data[label]["sx"].append(hand_data[label]["x"])
-        hand_data[label]["sy"].append(hand_data[label]["y"])
-        hand_data[label]["sz"].append(hand_data[label]["z"])
+    # =====================================================
+    # SMOOTHING
+    # =====================================================
 
-        hand_data[label]["avg_x"] = sum(hand_data[label]["sx"]) / len(hand_data[label]["sx"])
-        hand_data[label]["avg_y"] = sum(hand_data[label]["sy"]) / len(hand_data[label]["sy"])
-        hand_data[label]["avg_z"] = sum(hand_data[label]["sz"]) / len(hand_data[label]["sz"])
+    for label in ["L", "R"]:
+
+        hand_data[label]["sx"].append(
+            hand_data[label]["x"]
+        )
+
+        hand_data[label]["sy"].append(
+            hand_data[label]["y"]
+        )
+
+        hand_data[label]["sz"].append(
+            hand_data[label]["z"]
+        )
+
+        hand_data[label]["avg_x"] = (
+            sum(hand_data[label]["sx"])
+            / len(hand_data[label]["sx"])
+        )
+
+        hand_data[label]["avg_y"] = (
+            sum(hand_data[label]["sy"])
+            / len(hand_data[label]["sy"])
+        )
+
+        hand_data[label]["avg_z"] = (
+            sum(hand_data[label]["sz"])
+            / len(hand_data[label]["sz"])
+        )
+
+    # =====================================================
+    # UDP SEND
+    # =====================================================
 
     data_string = (
-        f"L,{hand_data['L']['avg_x']:.4f},{hand_data['L']['avg_y']:.4f},{hand_data['L']['avg_z']:.4f},"
-        f"{hand_data['L']['gesture']},{hand_data['L']['angle']:.1f};"
-        f"R,{hand_data['R']['avg_x']:.4f},{hand_data['R']['avg_y']:.4f},{hand_data['R']['avg_z']:.4f},"
-        f"{hand_data['R']['gesture']},{hand_data['R']['angle']:.1f}"
+        f"L,"
+        f"{hand_data['L']['avg_x']:.4f},"
+        f"{hand_data['L']['avg_y']:.4f},"
+        f"{hand_data['L']['avg_z']:.4f},"
+        f"{hand_data['L']['gesture']},"
+        f"{hand_data['L']['angle']:.1f};"
+        f"R,"
+        f"{hand_data['R']['avg_x']:.4f},"
+        f"{hand_data['R']['avg_y']:.4f},"
+        f"{hand_data['R']['avg_z']:.4f},"
+        f"{hand_data['R']['gesture']},"
+        f"{hand_data['R']['angle']:.1f}"
     )
 
     print(data_string)
 
-    sock.sendto(data_string.encode(), (UDP_IP, UDP_PORT))
+    sock.sendto(
+        data_string.encode(),
+        (UDP_IP, UDP_PORT)
+    )
 
     cv2.imshow("Left Camera", image_left)
     cv2.imshow("Under Camera", image_under)
